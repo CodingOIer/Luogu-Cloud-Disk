@@ -6,6 +6,7 @@ import pyperclip
 
 
 _uid = 0
+max_len = 1000000
 __client_id = ''
 cookie = ''
 
@@ -18,6 +19,10 @@ def init():
         _uid = js['_uid']
         __client_id = js['__client_id']
         cookie = f'__client_id={__client_id}; _uid={_uid};'
+        try:
+            max_len = js['max_len']
+        except:
+            pass
         return True
     except:
         return False
@@ -95,46 +100,93 @@ def decodeUrl(s):
     return urllib.parse.unquote(s)
 
 
+def split(s):
+    return [s[i:i+max_len] for i in range(0, len(s), max_len)]
+
+def craftPaste(data):
+    data = '```\nLuogu-Cloud-Disk\n' + data + '\n```'
+    body = {
+        'data': data,
+        'public': True,
+    }
+    h = getHeaders()
+    response = requests.post(
+        'https://www.luogu.com.cn/paste/new',
+        headers=h,
+        json=body,
+    )
+    js = json.loads(response.text)
+    return f'https://www.luogu.com.cn/paste/{js['id']}'
+
+def getPaste(url):
+    try:
+        response = requests.get(
+            url=url,
+            headers=getHeadersGet('https://www.luogu.com.cn/paste'),
+        )
+        res = response.text
+        res = rmb(res, 'JSON.parse(decodeURIComponent("')
+        res = rma(res, '"));')
+        js = json.loads(decodeUrl(res))
+        data = js['currentData']['paste']['data']
+        data = data[21:]
+        data = data[:-4]
+        return data
+    except:
+        pid = filename.split('/')[-1]
+        url = f'https://www.luogu.com/paste/{pid}'
+        response = requests.get(
+            url=url,
+            headers=getHeadersGet('https://www.luogu.com.cn'),
+        )
+        res = response.text
+        res = rmb(res, 'JSON.parse(decodeURIComponent("')
+        res = rma(res, '"));')
+        js = json.loads(decodeUrl(res))
+        data =  js['currentData']['paste']['data']
+        data = data[21:]
+        data = data[:-4]
+        return data
+
 if __name__ == '__main__':
     init()
     while True:
         filename = input("filename or url: ")
-        if filename[:5] == 'https':
-            print('检测为网页 url，开始下载')
-            try:
-                print('尝试下载（洛谷中国）')
-                response = requests.get(
-                    url=filename,
-                    headers=getHeadersGet('https://www.luogu.com.cn/paste'),
-                )
-                res = response.text
-                res = rmb(res, 'JSON.parse(decodeURIComponent("')
-                res = rma(res, '"));')
-                js = json.loads(decodeUrl(res))
-                data = js['currentData']['paste']['data']
-                print('成功加载数据，开始解码')
-                filename = data.split('?')[0]
-                bit = data.split('?')[1]
-                decodeFile(bit, filename)
-                print('解码完成，文件已保存')
-            except:
-                print('无法从洛谷中国下载，可能是非自己上传的文件，尝试使用洛谷国际')
-                pid = filename.split('/')[-1]
-                url = f'https://www.luogu.com/paste/{pid}'
-                response = requests.get(
-                    url=url,
-                    headers=getHeadersGet('https://www.luogu.com.cn'),
-                )
-                res = response.text
-                res = rmb(res, 'JSON.parse(decodeURIComponent("')
-                res = rma(res, '"));')
-                js = json.loads(decodeUrl(res))
-                data = js['currentData']['paste']['data']
-                print('成功加载数据，开始解码')
-                filename = data.split('?')[0]
-                bit = data.split('?')[1]
-                decodeFile(bit, filename)
-                print(f'解码完成，文件已保存，文件名为 {filename}')
+        if filename[:8] == '[REMOVE]':
+            pid = ''
+            for x in filename:
+                pid += x
+                if x == '/':
+                    pid = ''
+            url = f'https://www.luogu.com.cn/paste/{pid}'
+            print(f'检测到为删除命令，开始删除主分片 {url}')
+            data = getPaste(url)
+            links = data.split('&')
+            print(f'获取到 {len(links)} 个分片，开始删除')
+            for l in links:
+                kid = ''
+                for x in l:
+                    kid += x
+                    if x == '/':
+                        kid = ''
+                print(f'正在删除第 {links.index(l)+1} 分片')
+                response = requests.post(f'https://www.luogu.com.cn/paste/delete/{kid}', headers=getHeaders())
+            print(f'删除完成，开始删除主分片')
+            response = requests.post(f'https://www.luogu.com.cn/paste/delete/{pid}', headers=getHeaders())
+            print('删除完成')
+        elif filename[:5] == 'https':
+            print('检测为主分片 url，开始下载')
+            links = getPaste(filename)
+            links = links.split('&')
+            data = ''
+            print(f'检测到 {len(links)} 个分片，开始下载')
+            for l in links:
+                print(f'正在下载第 {links.index(l)+1} 分片')
+                data += getPaste(l)
+            data = data.split('?')
+            print('下载完成，开始解码')
+            decodeFile(data[1], data[0])
+            print(f'解码完成，文件已保存为 {data[0]}')
         else:
             print('检测到为文件路径，开始上传')
             if filename[0] == '"':
@@ -148,20 +200,17 @@ if __name__ == '__main__':
                 if x == '\\' or x == '/' or x == ':':
                     name = ''
             data = f'{name}?{code}'
-            print('文件编码完成，开始上传')
-            body = {
-                'data': data,
-                'public': True,
-            }
-            h = getHeaders()
-            response = requests.post(
-                'https://www.luogu.com.cn/paste/new',
-                headers=h,
-                json=body,
-            )
-            js = json.loads(response.text)
-            url = f'https://www.luogu.com.cn/paste/{js['id']}'
+            l = split(data)
+            print(f'文件编码完成，开始上传，共分割为 {len(l)} 分片')
+            links = ''
+            for x in l:
+                print(f'正在上传第 {l.index(x)+1} 分片')
+                url = craftPaste(x)
+                links += f'{url}&'
+            links = links[:-1]
+            print('上传完成，开始合成主分片')
+            url = craftPaste(links)
             pyperclip.copy(url)
-            print(f'上传成功，url 已复制到剪切板，为 {url}')
+            print(f'上传成功，主分片已复制到剪切板，为 {url}')
         input('按回车继续')
         print('\033c', end='')
