@@ -12,7 +12,7 @@ cookie = ''
 
 
 def init():
-    global _uid, __client_id, cookie
+    global _uid, __client_id, cookie, max_len
     try:
         with open('./setting.json', 'r') as f:
             js = json.load(f)
@@ -133,7 +133,7 @@ def getPaste(url):
         data = data[:-4]
         return data
     except:
-        pid = filename.split('/')[-1]
+        pid = url.split('/')[-1]
         url = f'https://www.luogu.com/paste/{pid}'
         response = requests.get(
             url=url,
@@ -149,7 +149,11 @@ def getPaste(url):
         return data
 
 if __name__ == '__main__':
-    init()
+    if not init():
+        _uid = 0
+        __client_id = ''
+        for _ in range(40):
+            __client_id += '0'
     while True:
         filename = input("filename or url: ")
         if filename[:8] == '[REMOVE]':
