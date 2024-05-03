@@ -6,9 +6,9 @@
 
 在编译后的程序同目录下编辑一个 `setting.json` 格式如下：
 
->  [!CAUTION]
+>  [!TIP]
 >
-> 如果不放置 `setting.json` 可能会有意想不到的结果。
+> 如果不放置 `setting.json` 将不会发送 `cookie` 信息，在此模式下仅能下载他人分享的文件。
 
 ```json
 {
